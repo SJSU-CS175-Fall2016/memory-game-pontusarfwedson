@@ -1,7 +1,12 @@
 package com.example.pontusarfwedson.memorygame;
 
 import android.content.Context;
+import android.content.DialogInterface;
+import android.content.SharedPreferences;
+import android.content.res.Resources;
 import android.graphics.Point;
+import android.os.Handler;
+import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.util.Log;
@@ -10,101 +15,468 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.AdapterView;
 import android.widget.BaseAdapter;
-import android.widget.GridLayout;
 import android.widget.GridView;
 import android.widget.ImageView;
 import android.widget.TextView;
-import android.widget.Toast;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 
 public class PlayActivity extends AppCompatActivity {
 
-    GridView cardsLayout;
-    ImageAdapter imgAd;
-    TextView pointsTxt;
-    boolean clickedOne = false;
-    int lastPicId;
-    int lastPicPos;
-    int points;
+    private GridView cardsLayout;
+    private ImageAdapter imgAd;
+    private TextView pointsTxt;
+    private Resources res;
+    private boolean clickedOne = false;
+    private boolean allowedToClick = true;
+    public ArrayList<Integer> pictureIds;
+    public int pictureVisibility[];
+    private int lastPicId;
+    private int lastPicPos;
+    private int points = 0;
+    private int currPos;
+    Context mContext;
+
+    //TAGS AND IDENTIFIERS
+    private final String SHARED_PREF_ID_TAG = "id";
+    private final String SHARED_PREF_VIS_TAG = "vis";
+    private final String SHARED_PREF_POINTS_TAG = "pts";
+
+    private Integer[] mThumbIds = {
+            R.drawable.aladdin,
+            R.drawable.goofey,
+            R.drawable.kalleanka,
+            R.drawable.lady,
+            R.drawable.mickey,
+            R.drawable.nallepuh,
+            R.drawable.pluto,
+            R.drawable.simba,
+            R.drawable.snowwhite,
+            R.drawable.tiger
+    };
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_play);
-        cardsLayout = (GridView) findViewById(R.id.gridCardsLayout);
-        pointsTxt = (TextView) findViewById(R.id.txtPoints);
 
-        imgAd = new ImageAdapter(this);
-        cardsLayout.setAdapter(imgAd);
-        cardsLayout.setClickable(true);
+        Log.d("PlayActivity:", "onCreate!");
 
-        cardsLayout.setOnItemClickListener(new AdapterView.OnItemClickListener() {
-            public void onItemClick(AdapterView<?> parent, View v,
-                                    int position, long id) {
-                Log.d("PlayActivity: ", "clicked pos " + position + " with id " + id);
-                ImageView imageView = (ImageView) v;
-                imageView.setImageResource(imgAd.randPicIds.get(position));
+        pictureVisibility = new int[20];
+        pictureIds = new ArrayList<Integer>();
 
 
+            SharedPreferences sharedPref = this.getPreferences(Context.MODE_PRIVATE);
+            if (sharedPref.getInt(SHARED_PREF_VIS_TAG + 0, -1) == -1) {
+                Log.d("PlayActivity: ", "NO shared preferences");
+                newGameInit();
 
-
-                if(!clickedOne)
-                {
-                    lastPicId = imgAd.randPicIds.get(position);
-                    lastPicPos = position;
-                    clickedOne = true;
-                }
-                else
-                {
-                    clickedOne = false;
-                    if(lastPicId == imgAd.randPicIds.get(position) && position != lastPicPos)
-                    {
-                        clickedOne = false;
-                        points++;
-                        pointsTxt.setText("Points: " + points);
-                        imgAd.getImageView(lastPicPos).setVisibility(View.INVISIBLE);
-                        imgAd.getImageView(position).setVisibility(View.INVISIBLE);
-
-                    }
-                    else if (lastPicId != imgAd.randPicIds.get(position))
-                    {
-                        Log.d("PlayActivity: ", "pos " + lastPicPos +" and pos " + position + " to be ?");
-
-                       imgAd.getImageView(lastPicPos).setImageResource(R.drawable.qmark);
-                       imgAd.getImageView(position).setImageResource(R.drawable.qmark);
-                    }
-                    else if(position  == lastPicPos)
-                    {
-                        clickedOne = true; //clicked same picture twice, should not count
-                    }
-                    else
-                    {
-                        Log.e("PlayActivity: ", "SHOULD NOT GET HERE, SOMETHING WRONG!");
-                    }
-
+            } else {
+                Log.d("PlayActivity: ", "FOUND shared preferences");
+                if(savedInstanceState == null) {
+                    Log.d("PlayActivity: ", "No savedInstanceState: SHOW DIALOG");
+                    handleSavedGame();
                 }
 
+                for (int i = 0; i < pictureVisibility.length; i++) {
+                    pictureIds.add(i, sharedPref.getInt(SHARED_PREF_ID_TAG + i, R.drawable.aladdin));
+                    pictureVisibility[i] = sharedPref.getInt(SHARED_PREF_VIS_TAG + i, 1);
+                }
+                points = sharedPref.getInt(SHARED_PREF_POINTS_TAG, 0);
             }
-        });
+
+
+
+        initializeAll();
+
 
     }
 
-    private int getImageSizes()
-    {
+
+
+    private int getImageSizes() {
         Display display = getWindowManager().getDefaultDisplay();
         Point size = new Point();
         display.getSize(size);
         int width = size.x;
         int height = size.y;
-        return width/5;
+        return width / 5;
+
+    }
+
+    /**************************************************************************
+     ********************* Overridden android methods
+     **************************************************************************/
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        Log.d("PlayActivity:", "onPause!");
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        Log.d("PlayActivity:", "onResume!");
+    }
+
+    @Override
+    protected void onStart() {
+        super.onStart();
+        Log.d("PlayActivity:", "onStart!");
+
+    }
+
+    @Override
+    protected void onStop() {
+        super.onStop();
+        Log.d("PlayActivity:", "onStop!");
+    }
+
+    @Override
+    public void onBackPressed() {
+        super.onBackPressed();
+        saveCurrentData();
+
+    }
+
+    @Override
+    protected void onSaveInstanceState(Bundle outState) {
+        super.onSaveInstanceState(outState);
+        Log.d("PlayActivity: ", "protected onSaveInstanceState");
+        outState.putIntegerArrayList(SHARED_PREF_ID_TAG, pictureIds);
+        outState.putIntArray(SHARED_PREF_VIS_TAG, pictureVisibility);
+        outState.putInt(SHARED_PREF_POINTS_TAG, points);
+    }
+
+    @Override
+    protected void onRestoreInstanceState(Bundle savedInstanceState) {
+        super.onRestoreInstanceState(savedInstanceState);
+        Log.d("PlayActivity: ", "onRestoreInstanceState");
+        pictureIds = savedInstanceState.getIntegerArrayList(SHARED_PREF_ID_TAG);
+        pictureVisibility = savedInstanceState.getIntArray(SHARED_PREF_VIS_TAG);
+        points = savedInstanceState.getInt(SHARED_PREF_POINTS_TAG);
+        initializeAll();
+    }
+
+
+    /****************************************************************************
+     ****************** METHODS FOR STORING DATA AND INITIALIZING
+     ***************************************************************************/
+
+
+    private void saveCurrentData()
+    {
+        Log.d("PlayActivity", "SAVING STATE to shared pref");
+        SharedPreferences sharedPref = this.getPreferences(Context.MODE_PRIVATE);
+        SharedPreferences.Editor editor = sharedPref.edit();
+        for(int i = 0; i < pictureVisibility.length; i++)
+        {
+            editor.putInt(SHARED_PREF_VIS_TAG+i, pictureVisibility[i]);
+            editor.putInt(SHARED_PREF_ID_TAG +i, pictureIds.get(i));
+
+        }
+        editor.putInt(SHARED_PREF_POINTS_TAG, points);
+        editor.commit();
+    }
+
+    private void clearSharedPref()
+    {
+        Log.d("PlayActivity: ", "CLEARING shared pref!");
+        SharedPreferences sharedPref = this.getPreferences(Context.MODE_PRIVATE);
+        SharedPreferences.Editor editor = sharedPref.edit();
+        editor.clear();
+        editor.commit();
+    }
+
+
+    private void newGameInit()
+    {
+        clearSharedPref();
+        pictureIds = randomizePictures();
+        Arrays.fill(pictureVisibility, 1);
+        points = 0;
+    }
+    private void initializeAll()
+    {
+        cardsLayout = (GridView) findViewById(R.id.gridCardsLayout);
+        pointsTxt = (TextView) findViewById(R.id.txtPoints);
+        res = getResources();
+        pointsTxt.setText(res.getString(R.string.points_str, points));
+        mContext = this;
+
+        imgAd = new ImageAdapter(this, pictureIds);
+        cardsLayout.setAdapter(imgAd);
+        cardsLayout.setClickable(true);
+
+
+        setCardClickListener();
+
+        //Using handler to invoke small delay before setting images to invisible. Otherwise imageViews have not enough
+        //time to initialize.
+        final Handler handler = new Handler();
+        handler.postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                setDoneToInvisible();
+            }
+        }, 10);
+    }
+
+
+
+    private void setDoneToInvisible()
+    {
+        Log.d("PlayActivity:", "setDoneToInvisible");
+        for(int i = 0; i < pictureVisibility.length; i++){
+            if(pictureVisibility[i] == 0) {
+                if(i < imgAd.imageViewLen()) {
+                     Log.d("PlayActivity: " , "setting " + i + " to invisible");
+                    imgAd.getImageView(i).setVisibility(View.INVISIBLE);
+                }else{
+                    Log.d("PlayActivity: ", "not setting to invisible, not in view: " +i);
+                }
+            }
+        }
+    }
+
+
+    private ArrayList<Integer> randomizePictures() {
+        ArrayList<Integer> allImagesTwice = new ArrayList<Integer>();
+        for (int i = 0; i < 2; i++) {
+
+            for (int j = 0; j < mThumbIds.length; j++) {
+                allImagesTwice.add(mThumbIds[j]);
+            }
+
+        }
+
+        ArrayList<Integer> allImagesRandom = new ArrayList<Integer>();
+
+        for (int i = 0; i < allImagesTwice.size(); ) {
+            int randInd = (int) (Math.random() * (allImagesTwice.size() - i));
+            allImagesRandom.add(allImagesTwice.remove(randInd));
+        }
+
+        return allImagesRandom;
+    }
+
+
+
+
+    /***********************************************************************************
+    ********************* Method handling clicking on tiles
+     ***********************************************************************************/
+    private void setCardClickListener()
+    {
+
+        cardsLayout.setOnItemClickListener(new AdapterView.OnItemClickListener() {
+            public void onItemClick(AdapterView<?> parent, View v,
+                                    int position, long id) {
+
+                if (allowedToClick) {
+                    currPos = position;
+                    Log.d("PlayActivity: ", "clicked pos " + position + " with id " + id);
+                    ImageView imageView = (ImageView) v;
+                    imageView.setImageResource(imgAd.randPicIds.get(position));
+                    imgAd.getImageView(position).setImageResource(imgAd.randPicIds.get(position));
+
+
+                    if (!clickedOne) {
+                        lastPicId = imgAd.randPicIds.get(position);
+                        lastPicPos = position;
+                        clickedOne = true;
+                    } else {
+                        clickedOne = false;
+                        if (lastPicId == imgAd.randPicIds.get(position) && position != lastPicPos) {
+                            clickedOne = false;
+                            pointsTxt.setText(res.getString(R.string.points_str, ++points));
+                           setToInvisibleDelayed();
+                            if(points == imgAd.getMaxPoints())
+                                handleWin();
+
+                        } else if (lastPicId != imgAd.randPicIds.get(position)) {
+                            Log.d("PlayActivity: ", "pos " + lastPicPos + " and pos " + position + " to be ?");
+                            setToQmarkDelayed();
+
+
+
+                        } else if (position == lastPicPos) {
+                            clickedOne = true; //clicked same picture twice, should not count. Keep letting user click!
+                        } else {
+                            Log.e("PlayActivity: ", "SHOULD NOT GET HERE, SOMETHING WRONG!");
+                        }
+
+                    }
+
+                }
+            }
+        });
+    }
+
+
+
+
+    /********************************************************************************************************************
+     *********** Methods to set 2 tiles to Qmark/invisible after 1 second (and making grid unclickable)
+     *********************************************************************************************************************/
+
+    private void setToQmarkDelayed()
+    {
+        imgAd.getImageView(lastPicPos).postDelayed(setQmarkLast, 1000);
+        imgAd.getImageView(currPos).postDelayed(setQmarkCurr, 1000);
+        allowedToClick = false;
+        imgAd.getImageView(currPos).postDelayed(setClickable, 1000);
+    }
+
+    private void setToInvisibleDelayed()
+    {
+        imgAd.getImageView(lastPicPos).postDelayed(setInviLast, 1000);
+        imgAd.getImageView(currPos).postDelayed(setInviCurr, 1000);
+        pictureVisibility[currPos] = 0;
+        pictureVisibility[lastPicPos] = 0;
+        allowedToClick = false;
+        imgAd.getImageView(currPos).postDelayed(setClickable, 1000);
+    }
+
+
+    /***********************************************************************************
+    ***************************** ALERT DIALOGS
+     ***********************************************************************************/
+    private void handleWin()
+    {
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setMessage(R.string.dialog_congrats_str);
+        builder.setPositiveButton(R.string.dialog_ok_str, new DialogInterface.OnClickListener() {
+            public void onClick(DialogInterface dialog, int id) {
+                newGameInit();
+                initializeAll();
+            }
+        });
+        builder.setNegativeButton(R.string.dialog_no_str, new DialogInterface.OnClickListener() {
+            public void onClick(DialogInterface dialog, int id) {
+                newGameInit();
+                finish();
+            }
+        });
+
+        AlertDialog dialog  = builder.create();
+        dialog.show();
+
+    }
+
+    private void handleSavedGame()
+    {
+
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setMessage(R.string.dialog_saved_game_str);
+        builder.setPositiveButton(R.string.dialog_ok_str, new DialogInterface.OnClickListener() {
+            public void onClick(DialogInterface dialog, int id) {
+
+                //On same game, initialize (may already have been done through onCreate)
+                initializeAll();
+            }
+        });
+        builder.setNegativeButton(R.string.dialog_new_game_str, new DialogInterface.OnClickListener() {
+            public void onClick(DialogInterface dialog, int id) {
+
+                //On new game: clear ref, set values and initialize everything
+                newGameInit();
+                initializeAll();
+            }
+        });
+        builder.setNeutralButton(R.string.dialog_go_back_str, new DialogInterface.OnClickListener() {
+            public void onClick(DialogInterface dialog, int id) {
+
+                //On go back: onBackPressed
+                onBackPressed();
+            }
+        });
+
+        AlertDialog dialog  = builder.create();
+        dialog.show();
 
     }
 
 
+
+
+    /**********************************************************************
+     *******************RUNNABLES USED WITH POSTDELAYED
+     **********************************************************************/
+
+
+    /**
+     * Runnable to set current imageview to questionmark
+     */
+    Runnable setQmarkCurr = new Runnable() {
+        @Override
+        public void run() {
+            imgAd.getImageView(currPos).setImageResource(R.drawable.qmark);
+        }
+    };
+
+    /**
+     * Runnable to set last imageview to questionmark
+     */
+    Runnable setQmarkLast = new Runnable() {
+        @Override
+        public void run() {
+            imgAd.getImageView(lastPicPos).setImageResource(R.drawable.qmark);
+        }
+    };
+
+    Runnable setInviCurr = new Runnable() {
+        @Override
+        public void run() {
+            imgAd.getImageView(currPos).setVisibility(View.INVISIBLE);
+        }
+    };
+
+    Runnable setInviLast = new Runnable() {
+        @Override
+        public void run() {
+            imgAd.getImageView(lastPicPos).setVisibility(View.INVISIBLE);
+        }
+    };
+
+    Runnable setInviSharedPref = new Runnable() {
+        @Override
+        public void run() {
+            setDoneToInvisible();
+        }
+    };
+
+
+
+
+
+    /**
+     * Runnable to set gridview to clickable
+     */
+    Runnable setClickable = new Runnable() {
+        @Override
+        public void run() {
+            allowedToClick = true;
+        }
+    };
+
+
+
+
+
+    /***********************************************************************
+     *######################################################################
+     *                    IMPLEMENTED IMAGE ADAPTER CLASS
+     *######################################################################
+     **********************************************************************/
+
+
     /**
      * Outline of class ImageAdapter gotten from android developers page about GridView (https://developer.android.com/guide/topics/ui/layout/gridview.html)
-     * Small changes to it been made to fit this project.
+     * Changes has been made to it to make it fit this project.
      */
     public class ImageAdapter extends BaseAdapter {
         private Context mContext;
@@ -112,51 +484,36 @@ public class PlayActivity extends AppCompatActivity {
         int qmarkpicId = R.drawable.qmark;
         public ArrayList<ImageView> imageViews = new ArrayList<ImageView>();
 
-        public ImageAdapter(Context c) {
+        public ImageAdapter(Context c, ArrayList<Integer> picIds) {
             mContext = c;
-            randPicIds = randomizePictures();
+            randPicIds = picIds;
         }
 
         public int getCount() {
-            return mThumbIds.length*2;
+            return mThumbIds.length * 2;
         }
 
+        public int getMaxPoints(){
+            return mThumbIds.length;
+        }
 
-
-        private ArrayList<Integer> randomizePictures()
+        public ArrayList<Integer> getPictureIds()
         {
-            ArrayList<Integer> allImagesTwice = new ArrayList<Integer>();
-            for(int i = 0; i < 2; i++)
-            {
-
-                for(int j = 0; j < mThumbIds.length; j++)
-                {
-                    allImagesTwice.add(mThumbIds[j]);
-                }
-
-            }
-
-            ArrayList<Integer> allImagesRandom = new ArrayList<Integer>();
-            Log.d("PlayActivity.java", "allImagesTwice.size(): "+allImagesTwice.size());
-
-            for(int i = 0; i < allImagesTwice.size();)
-            {
-                int randInd = (int) (Math.random()*(allImagesTwice.size()-i));
-                Log.d("TEST", ""+allImagesTwice.size());
-                allImagesRandom.add(allImagesTwice.remove(randInd));
-            }
-
-            Log.d("PlayActivity.java", "allImagesRandom.size(): "+allImagesRandom.size());
-            return allImagesRandom;
+            return randPicIds;
         }
+
 
         public Object getItem(int position) {
             return null;
         }
 
-        public ImageView getImageView(int position)
-        {
+        public ImageView getImageView(int position) {
             return imageViews.get(position);
+        }
+
+        public int imageViewLen()
+        {
+            return imageViews.size();
         }
 
         public long getItemId(int position) {
@@ -172,16 +529,14 @@ public class PlayActivity extends AppCompatActivity {
                 imageView.setLayoutParams(new GridView.LayoutParams(getImageSizes(), getImageSizes()));
                 imageView.setScaleType(ImageView.ScaleType.CENTER_CROP);
                 imageView.setPadding(8, 8, 8, 8);
-            }
-            else
-            {
+            } else {
                 imageView = (ImageView) convertView;
             }
 
-            //imageView.setImageResource(randPicIds.get(position));
+
             imageView.setImageResource(qmarkpicId);
-            if(position == imageViews.size()) {
-                Log.d("PlayActivity:", "generate imViews: " + position);
+            if (position == imageViews.size()) {
+                Log.d("PlayActivity: ", "adding view: " + position);
                 imageViews.add(imageView);
             }
             return imageView;
@@ -202,8 +557,8 @@ public class PlayActivity extends AppCompatActivity {
         };
 
 
-
-
     }
+
+
 }
 
