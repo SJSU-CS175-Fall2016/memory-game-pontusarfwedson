@@ -58,4 +58,12 @@
         android:id="@+id/textView6"
         android:layout_below="@+id/textView5"
         android:layout_centerHorizontal="true" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/bonus_rule"
+        android:id="@+id/textView7"
+        android:layout_below="@+id/textView6"
+        android:layout_centerHorizontal="true" />
 </RelativeLayout>

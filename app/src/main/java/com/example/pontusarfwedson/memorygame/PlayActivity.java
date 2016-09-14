@@ -21,12 +21,14 @@ import android.widget.TextView;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Timer;
+import java.util.TimerTask;
 
 public class PlayActivity extends AppCompatActivity {
 
     private GridView cardsLayout;
     private ImageAdapter imgAd;
-    private TextView pointsTxt;
+    private TextView pointsTxt, tryTxt;
     private Resources res;
     private boolean clickedOne = false;
     private boolean allowedToClick = true;
@@ -34,7 +36,7 @@ public class PlayActivity extends AppCompatActivity {
     public int pictureVisibility[];
     private int lastPicId;
     private int lastPicPos;
-    private int points = 0;
+    private int points = 0, tries = 0;
     private int currPos;
     Context mContext;
 
@@ -42,6 +44,7 @@ public class PlayActivity extends AppCompatActivity {
     private final String SHARED_PREF_ID_TAG = "id";
     private final String SHARED_PREF_VIS_TAG = "vis";
     private final String SHARED_PREF_POINTS_TAG = "pts";
+    private final String SHARED_PREF_TRIES_TAG = "tries";
 
     private Integer[] mThumbIds = {
             R.drawable.aladdin,
@@ -61,11 +64,9 @@ public class PlayActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_play);
-
+        initializeRes();
         Log.d("PlayActivity:", "onCreate!");
 
-        pictureVisibility = new int[20];
-        pictureIds = new ArrayList<Integer>();
 
 
             SharedPreferences sharedPref = this.getPreferences(Context.MODE_PRIVATE);
@@ -85,6 +86,7 @@ public class PlayActivity extends AppCompatActivity {
                     pictureVisibility[i] = sharedPref.getInt(SHARED_PREF_VIS_TAG + i, 1);
                 }
                 points = sharedPref.getInt(SHARED_PREF_POINTS_TAG, 0);
+                tries = sharedPref.getInt(SHARED_PREF_TRIES_TAG, 0);
             }
 
 
@@ -149,6 +151,7 @@ public class PlayActivity extends AppCompatActivity {
         outState.putIntegerArrayList(SHARED_PREF_ID_TAG, pictureIds);
         outState.putIntArray(SHARED_PREF_VIS_TAG, pictureVisibility);
         outState.putInt(SHARED_PREF_POINTS_TAG, points);
+        outState.putInt(SHARED_PREF_TRIES_TAG, tries);
     }
 
     @Override
@@ -158,6 +161,7 @@ public class PlayActivity extends AppCompatActivity {
         pictureIds = savedInstanceState.getIntegerArrayList(SHARED_PREF_ID_TAG);
         pictureVisibility = savedInstanceState.getIntArray(SHARED_PREF_VIS_TAG);
         points = savedInstanceState.getInt(SHARED_PREF_POINTS_TAG);
+        tries = savedInstanceState.getInt(SHARED_PREF_TRIES_TAG);
         initializeAll();
     }
 
@@ -167,6 +171,9 @@ public class PlayActivity extends AppCompatActivity {
      ***************************************************************************/
 
 
+    /**
+     * Method to save the current data into shared preferences.
+     */
     private void saveCurrentData()
     {
         Log.d("PlayActivity", "SAVING STATE to shared pref");
@@ -179,9 +186,13 @@ public class PlayActivity extends AppCompatActivity {
 
         }
         editor.putInt(SHARED_PREF_POINTS_TAG, points);
+        editor.putInt(SHARED_PREF_TRIES_TAG, tries);
         editor.commit();
     }
 
+    /**
+     * Method to clear the shared preferences of all its data.
+     */
     private void clearSharedPref()
     {
         Log.d("PlayActivity: ", "CLEARING shared pref!");
@@ -192,30 +203,49 @@ public class PlayActivity extends AppCompatActivity {
     }
 
 
+    /**
+     * Method invoked when initializing new game. Will reset and re-randomize all images.
+     */
     private void newGameInit()
     {
         clearSharedPref();
         pictureIds = randomizePictures();
         Arrays.fill(pictureVisibility, 1);
         points = 0;
+        tries = 0;
     }
-    private void initializeAll()
+
+
+
+    /**
+     * Initializing the used resources.
+     */
+    private void initializeRes()
     {
         cardsLayout = (GridView) findViewById(R.id.gridCardsLayout);
         pointsTxt = (TextView) findViewById(R.id.txtPoints);
+        tryTxt = (TextView) findViewById(R.id.txtTry);
         res = getResources();
+        pictureVisibility = new int[20];
+        pictureIds = new ArrayList<Integer>();
+    }
+
+    /**
+     * Initializing everything but the resources. Currently uses handler for a delayed post, not desirable.
+     */
+    private void initializeAll()
+    {
         pointsTxt.setText(res.getString(R.string.points_str, points));
+        tryTxt.setText(res.getString(R.string.try_str, tries));
         mContext = this;
 
         imgAd = new ImageAdapter(this, pictureIds);
         cardsLayout.setAdapter(imgAd);
         cardsLayout.setClickable(true);
-
-
         setCardClickListener();
 
         //Using handler to invoke small delay before setting images to invisible. Otherwise imageViews have not enough
-        //time to initialize.
+        //time to initialize. Bad implementation but not sure how to fix this without too much of a workaround.
         final Handler handler = new Handler();
         handler.postDelayed(new Runnable() {
             @Override
@@ -226,7 +256,9 @@ public class PlayActivity extends AppCompatActivity {
     }
 
 
-
+    /**
+     * Setting the tiles to invisible if already chosen. Controlled by the instance variable pictureInvisibility.
+     */
     private void setDoneToInvisible()
     {
         Log.d("PlayActivity:", "setDoneToInvisible");
@@ -243,6 +275,10 @@ public class PlayActivity extends AppCompatActivity {
     }
 
 
+    /**
+     * Method that randomizes the pictures with two of every one defined in mThumdIds.
+     * @return ArrayList containing all the new randomized pictures to be used when setting up views.
+     */
     private ArrayList<Integer> randomizePictures() {
         ArrayList<Integer> allImagesTwice = new ArrayList<Integer>();
         for (int i = 0; i < 2; i++) {
@@ -269,6 +305,10 @@ public class PlayActivity extends AppCompatActivity {
     /***********************************************************************************
     ********************* Method handling clicking on tiles
      ***********************************************************************************/
+
+    /**
+     * Setting the onItemClickListener for the tiles and defining the onClick implementation.
+     */
     private void setCardClickListener()
     {
 
@@ -289,6 +329,7 @@ public class PlayActivity extends AppCompatActivity {
                         lastPicPos = position;
                         clickedOne = true;
                     } else {
+                        tryTxt.setText(res.getString(R.string.try_str, ++tries));
                         clickedOne = false;
                         if (lastPicId == imgAd.randPicIds.get(position) && position != lastPicPos) {
                             clickedOne = false;
@@ -317,11 +358,9 @@ public class PlayActivity extends AppCompatActivity {
     }
 
 
-
-
-    /********************************************************************************************************************
-     *********** Methods to set 2 tiles to Qmark/invisible after 1 second (and making grid unclickable)
-     *********************************************************************************************************************/
+    /**
+     * Method to set two clicked tiles back to questionmark.
+     */
 
     private void setToQmarkDelayed()
     {
@@ -331,6 +370,9 @@ public class PlayActivity extends AppCompatActivity {
         imgAd.getImageView(currPos).postDelayed(setClickable, 1000);
     }
 
+    /**
+     * Method to set two clicked tiles to invisible.
+     */
     private void setToInvisibleDelayed()
     {
         imgAd.getImageView(lastPicPos).postDelayed(setInviLast, 1000);
@@ -345,10 +387,15 @@ public class PlayActivity extends AppCompatActivity {
     /***********************************************************************************
     ***************************** ALERT DIALOGS
      ***********************************************************************************/
+
+    /**
+     * Method to create, define and show the alert dialog used when finishing the game.
+     */
     private void handleWin()
     {
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
-        builder.setMessage(R.string.dialog_congrats_str);
+       // builder.setMessage(R.string.dialog_congrats_str);
+        builder.setMessage(res.getString(R.string.dialog_congrats_str, (int)(1000./tries))); //If makes it in 10 tries, score is 100. The more tries, the lower score.
         builder.setPositiveButton(R.string.dialog_ok_str, new DialogInterface.OnClickListener() {
             public void onClick(DialogInterface dialog, int id) {
                 newGameInit();
@@ -367,6 +414,9 @@ public class PlayActivity extends AppCompatActivity {
 
     }
 
+    /**
+     * Method used to create, define and show the alert dialog used when starting new game with saved data.
+     */
     private void handleSavedGame()
     {
 
@@ -428,6 +478,9 @@ public class PlayActivity extends AppCompatActivity {
         }
     };
 
+    /**
+     * Runnable to set current clicked tile to invisible
+     */
     Runnable setInviCurr = new Runnable() {
         @Override
         public void run() {
@@ -435,6 +488,9 @@ public class PlayActivity extends AppCompatActivity {
         }
     };
 
+    /**
+     * Runnable to set last clicked tile to invisible.
+     */
     Runnable setInviLast = new Runnable() {
         @Override
         public void run() {
@@ -448,8 +504,6 @@ public class PlayActivity extends AppCompatActivity {
             setDoneToInvisible();
         }
     };
-
-
 
 
 
@@ -488,7 +542,6 @@ public class PlayActivity extends AppCompatActivity {
             mContext = c;
             randPicIds = picIds;
         }
-
         public int getCount() {
             return mThumbIds.length * 2;
         }
