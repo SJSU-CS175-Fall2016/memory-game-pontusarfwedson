@@ -2,6 +2,7 @@ package com.example.pontusarfwedson.memorygame;
 
 import android.content.Context;
 import android.content.DialogInterface;
+import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.res.Resources;
 import android.graphics.Point;
@@ -11,25 +12,45 @@ import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.Display;
+import android.view.Menu;
+import android.view.MenuInflater;
+import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.AdapterView;
 import android.widget.BaseAdapter;
+import android.widget.Button;
 import android.widget.GridView;
 import android.widget.ImageView;
 import android.widget.TextView;
+import android.widget.Toast;
+
+import com.daimajia.androidanimations.library.Techniques;
+import com.daimajia.androidanimations.library.YoYo;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Timer;
 import java.util.TimerTask;
 
+import butterknife.BindView;
+import butterknife.ButterKnife;
+import butterknife.OnClick;
+
 public class PlayActivity extends AppCompatActivity {
 
-    private GridView cardsLayout;
-    private ImageAdapter imgAd;
-    private TextView pointsTxt, tryTxt;
+    @BindView(R.id.gridCardsLayout) GridView cardsLayout;
+    @BindView(R.id.txtPoints) TextView pointsTxt;
+    @BindView(R.id.txtTry) TextView tryTxt;
+    @BindView(R.id.btnRestart) Button btnRestart;
+
+
+   // private GridView cardsLayout;
+   // private TextView pointsTxt, tryTxt;
     private Resources res;
+    private ImageAdapter imgAd;
+
+
     private boolean clickedOne = false;
     private boolean allowedToClick = true;
     public ArrayList<Integer> pictureIds;
@@ -64,6 +85,7 @@ public class PlayActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_play);
+        ButterKnife.bind(this);
         initializeRes();
         Log.d("PlayActivity:", "onCreate!");
 
@@ -165,6 +187,28 @@ public class PlayActivity extends AppCompatActivity {
         initializeAll();
     }
 
+    public boolean onCreateOptionsMenu(Menu menu) {
+        MenuInflater inflater = getMenuInflater();
+        inflater.inflate(R.menu.menu_main, menu);
+        return true;
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item) {
+        if(item.getTitle().toString().equals(getResources().getString(R.string.menu_shuffle)))
+        {
+            pictureIds = shuffleCards();
+            initializeAll();
+        }
+        else
+        {
+            newGameInit();
+            initializeAll();
+        }
+        return super.onOptionsItemSelected(item);
+    }
+
+
 
     /****************************************************************************
      ****************** METHODS FOR STORING DATA AND INITIALIZING
@@ -215,6 +259,36 @@ public class PlayActivity extends AppCompatActivity {
         tries = 0;
     }
 
+    private ArrayList<Integer> shuffleCards()
+    {
+        ArrayList<Integer> shuffled = new ArrayList<Integer>();
+        int newVisible[] = new int[20];
+        int lenVis=0;
+
+        for(int i = 0; i < pictureIds.size(); i++){
+            if(pictureVisibility[i] == 1){
+                shuffled.add(pictureIds.get(i));
+                lenVis++;
+            }
+        }
+
+        for(int i = 0; i < pictureVisibility.length; i++){
+            if(i < lenVis)
+                newVisible[i] = 1;
+            else
+                newVisible[i] = 0;
+        }
+
+        for(int i = 0; i < pictureIds.size(); i++){
+            if(pictureVisibility[i] == 0){
+                shuffled.add(pictureIds.get(i));
+            }
+        }
+        pictureVisibility = newVisible;
+        return shuffled;
+
+    }
+
 
 
     /**
@@ -246,14 +320,15 @@ public class PlayActivity extends AppCompatActivity {
 
         //Using handler to invoke small delay before setting images to invisible. Otherwise imageViews have not enough
         //time to initialize. Bad implementation but not sure how to fix this without too much of a workaround.
-        final Handler handler = new Handler();
+       final Handler handler = new Handler();
         handler.postDelayed(new Runnable() {
             @Override
             public void run() {
                 setDoneToInvisible();
             }
-        }, 10);
+        }, 20);
     }
+
 
 
     /**
@@ -309,6 +384,12 @@ public class PlayActivity extends AppCompatActivity {
     /**
      * Setting the onItemClickListener for the tiles and defining the onClick implementation.
      */
+
+    @OnClick(R.id.btnRestart)
+    public void restartClick(View view) {
+        newGameInit();
+        initializeAll();
+    }
     private void setCardClickListener()
     {
 
@@ -321,8 +402,9 @@ public class PlayActivity extends AppCompatActivity {
                     Log.d("PlayActivity: ", "clicked pos " + position + " with id " + id);
                     ImageView imageView = (ImageView) v;
                     imageView.setImageResource(imgAd.randPicIds.get(position));
-                    imgAd.getImageView(position).setImageResource(imgAd.randPicIds.get(position));
-
+                    YoYo.with(Techniques.Bounce)
+                            .duration(500)
+                            .playOn(v);
 
                     if (!clickedOne) {
                         lastPicId = imgAd.randPicIds.get(position);
@@ -588,6 +670,9 @@ public class PlayActivity extends AppCompatActivity {
 
 
             imageView.setImageResource(qmarkpicId);
+
+            //For some reason the method gets called several times in a row with position 0.
+            //I only want to store one imageview per position, hence the if statement.
             if (position == imageViews.size()) {
                 Log.d("PlayActivity: ", "adding view: " + position);
                 imageViews.add(imageView);
